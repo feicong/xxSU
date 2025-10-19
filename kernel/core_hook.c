@@ -57,6 +57,16 @@ extern void unregister_kprobe_thread();
 void unregister_kprobe_thread() {}
 #endif
 
+// extras.c
+static bool ksu_avc_spoof_enabled = true;
+#ifdef CONFIG_KSU_EXTRAS
+extern void avc_spoof_init();
+extern void avc_spoof_exit();
+#else
+void avc_spoof_init() { pr_info("%s: feature not implemented!\n", __func__); }
+void avc_spoof_exit() { pr_info("%s: feature not implemented!\n", __func__); }
+#endif
+
 static inline bool is_allow_su()
 {
 	if (is_manager()) {
@@ -412,6 +422,27 @@ skip_check:
 		return 0;
 	}
 
+	if (arg2 == CMD_TOGGLE_AVC_SPOOF) {
+
+		pr_info("toggle_avc_spoof, cmd: %lu subcmd: %lu\n", arg2, arg3);
+
+		if (arg3 == 0) {
+			avc_spoof_exit();
+			ksu_avc_spoof_enabled = false;
+		}
+
+		if (arg3 == 1) {
+			avc_spoof_init();
+			ksu_avc_spoof_enabled = true;
+		}
+
+
+		if (copy_to_user(result, &reply_ok, sizeof(reply_ok))) {
+			pr_err("prctl reply error, cmd: %lu\n", arg2);
+		}
+		return 0;
+	}
+
 	if (arg2 == CMD_BECOME_MANAGER) {
 		if (from_manager) {
 			if (copy_to_user(result, &reply_ok, sizeof(reply_ok))) {
@@ -456,6 +487,7 @@ skip_check:
 				boot_complete_lock = true;
 				pr_info("boot_complete triggered\n");
 				unregister_kprobe_thread();
+				avc_spoof_init(); 
 			}
 			break;
 		}
@@ -595,6 +627,18 @@ skip_check:
 			pr_err("copy su compat failed\n");
 			return 0;
 		}
+		if (copy_to_user(result, &reply_ok, sizeof(reply_ok))) {
+			pr_err("prctl reply error, cmd: %lu\n", arg2);
+		}
+		return 0;
+	}
+
+	if (arg2 == CMD_IS_AVC_SPOOF_ENABLED) {
+		if (copy_to_user(arg3, &ksu_avc_spoof_enabled, sizeof(ksu_avc_spoof_enabled))) {
+			pr_err("copy avc spoof failed\n");
+			return 0;
+		}
+
 		if (copy_to_user(result, &reply_ok, sizeof(reply_ok))) {
 			pr_err("prctl reply error, cmd: %lu\n", arg2);
 		}
